@@ -2,17 +2,13 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { createServer as createViteServer } from 'vite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+const ROOT_DIR = process.cwd();
 const PORT = Number(process.env.PORT || 3000);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = path.resolve(ROOT_DIR, 'data');
 const INQUIRIES_FILE = path.join(DATA_DIR, 'inquiries.json');
 const TOKEN_SECRET = process.env.FORM_TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
 
@@ -260,22 +256,31 @@ async function startServer() {
   });
 
   if (!IS_PROD) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.join(__dirname, 'dist');
+    const distDir = path.resolve(ROOT_DIR, 'dist');
     app.use(express.static(distDir, { index: false }));
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Nexora Digital server running on http://0.0.0.0:${PORT} (${IS_PROD ? 'production' : 'development'})`);
+  });
+
+  server.on('error', (err) => {
+    console.error('Server listen error:', err);
+    process.exit(1);
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('Failed to start Nexora Digital server:', err);
+  process.exit(1);
+});
